@@ -1,0 +1,280 @@
+1.
+-QUESTION
+Find for each customer the average sale in 'NY', the average sale in 'CT' and the average sale in 'NJ', if New York's average is greater than the other two.
+
+-EMF
+select cust, avg(x.quant), avg(y.quant), avg(z.quant)
+from sales
+where yy=1997
+group by cust; x, y, z
+such that x.cust=cust and y.state='NY',
+          y.cust=cust and y.state='CT',
+          z.cust=cust and z.state='NJ'
+having avg(x.quant)>avg(y.quant) and avg(x.quant)>avg(z.quant)
+
+-INPUT
+S
+cust, avg_1_quant, avg_2_quant, avg_3_quant
+n
+3
+V
+cust
+F
+avg_1_quant, avg_2_quant, avg_3_quant
+o
+1 cust=cust and state='NY'
+2 cust=cust and state='CT'
+3 cust=cust and state='NJ'
+G
+avg_1_quant>avg_2_quant and avg_1_quant>avg_3_quant
+W
+yy=1997
+T
+sales
+
+-SQL
+select x.cust, avg(x.quant), avg(y.quant), avg(z.quant)
+from sales as x, sales as y, sales as z
+where x.year=1997 and x.state='NY'
+and y.cust=x.cust and y.year=x.year and y.state='CT' 
+and z.cust=x.cust and z.year=x.year and z.state='NJ' 
+group by x.cust
+having avg(x.quant)>avg(y.quant) and avg(x.quant)>avg(z.quant)
+order by x.cust
+
+2.
+-QUESTION
+For each product and for sales of 1997, show each month's total sales as percentage of the year-long total sales.
+
+-EMF
+select prod, mm, sum(x.quant)/sum(y.quant)
+from sales
+where yy=1997
+group by prod,mm; x, y
+such that x.prod=prod and x.mm=mm,
+	  y.prod=prod
+
+-INPUT
+S
+prod, mm, 100*sum_1_quant/sum_2_quant
+n
+2
+V
+prod, mm
+F
+sum_1_quant, sum_2_quant
+o
+1 prod=prod and mm=mm
+2 prod=prod
+G
+W
+yy=1997
+T
+sales
+
+-SQL
+select x.prod, x.month,  x.s1/y.s2
+from 
+(select prod, month, 100*sum(quant) as s1
+from sales as x
+where year=1997
+group by prod, month
+) as x,
+(select prod, sum(quant) as s2
+from sales
+where year = 1997
+group by prod
+) as y
+where x.prod=y.prod
+order by x.prod
+
+3.
+-QUESTION
+Find for each customer and for each month of 1997 the customer's average sale before, during and after this month.
+
+-EMF
+select cust, mm, avg(x.quant), avg(quant), avg(y.quant)
+from sales
+where yy=1997
+group by cust, mm; x, y
+such that x.cust=cust and x.mm<mm,
+	  y.cust=cust and y.mm>mm
+
+-INPUT
+S
+cust, mm, avg_1_quant, avg_0_quant, avg_2_quant
+n
+2
+V
+cust, mm
+F
+avg_0_quant, avg_1_quant, avg_2_quant
+o
+1 cust=cust and mm<mm
+2 cust=cust and mm>mm
+G
+W
+yy=1997
+T
+sales
+
+-SQL
+select s1.cust, s1.month, s2.a, s1.a, s3.a
+from
+(select cust, month, avg(quant) as a
+from sales
+where year=1997
+group by cust, month
+) as s1
+left join
+(select x.cust, x.month, avg(y.quant) as a
+from sales as x, sales as y
+where x.cust=y.cust and y.month<x.month and x.year=1997 and y.year=1997
+group by x.cust, x.month
+) as s2 on (s1.cust=s2.cust and s1.month=s2.month)
+left join 
+(select x.cust, x.month, avg(y.quant) as a
+from sales as x, sales as y
+where x.cust=y.cust and y.month>x.month and x.year=1997 and y.year=1997
+group by x.cust, x.month
+) as s3 on(s1.cust=s3.cust and s1.month=s3.month)
+order by s1.cust
+
+4.
+-QUESTION
+For each product count for each month of 1997 the sales that were between the previous and the following month's average sale.
+
+-EMF
+select prod,mm,count(z.*)
+from sales
+where yy=1997
+group by prod,mm;x,y,z
+such that x.prod=prod and x.mm=mm-1,
+	  y.prod=prod and y.mm=mm+1,
+	  z.prod=prod and z.mm=mm and z.quant>avg(x.quant) and z.quant<avg(y.quant)
+having count(z.*)>0
+
+-INPUT
+S
+prod, mm, count_3_quant
+n
+3
+V
+prod, mm
+F
+count_3_quant, avg_1_quant, avg_2_quant
+o
+1 prod=prod and mm=mm-1
+2 prod=prod and mm=mm+1
+3 prod=prod and mm=mm and quant>avg_1_quant and quant<avg_2_quant
+G
+count_3_quant
+W
+yy=1997
+T
+sales
+
+-SQL
+select prod,month,count(*)
+from sales as s1
+where year=1997
+and s1.quant>
+(select avg(quant)
+from sales as s2
+where s2.prod=s1.prod and s2.month=s1.month-1 and s2.year=s1.year
+group by prod,month)
+and s1.quant<
+(select avg(quant)
+from sales as s3
+where s3.prod=s1.prod and s3.month=s1.month+1 and s3.year=s1.year
+group by prod,month)
+group by prod,month
+
+5.
+-QUESTION
+Compare for each customer and each product, the customer's average sale of this product versus the average sale of the product to the other customers.
+
+-EMF
+select cust, prod, avg(x.quant), avg(y.quant)
+from sales
+group by cust, prod; x, y
+such that x.cust=cust and x.prod=prod,
+	  y.cust<>cust and y.prod=prod
+
+-INPUT
+S
+cust, prod, avg_1_quant, avg_2_quant
+n
+2
+V
+cust, prod
+F
+avg_1_quant, avg_2_quant
+o
+1 cust=cust and prod=prod
+2 cust<>cust and prod=prod
+G
+W
+T
+sales
+
+-SQL
+select s1.cust, s1.prod, s1.a, s2.a
+from
+(select cust, prod, avg(quant) as a
+from sales
+group by cust, prod
+) as s1,
+(
+select x.cust, x.prod, avg(y.quant) as a
+from sales as x, sales as y
+where x.cust<>y.cust and x.prod=y.prod
+group by x.cust, x.prod
+) as s2
+where s1.cust=s2.cust and s1.prod=s2.prod
+order by s1.cust
+
+6.
+-QUESTION
+Find the for each product the median sale(we assume odd number of sales for simplicity of presentation).
+
+-EMF
+select prod, quant
+from sales
+group by prod, quant; x, y
+such that x.prod=prod,
+	  y.prod=prod and y.quant<quant
+having count(y.prod)=count(x.prod)/2
+
+-INPUT
+S
+prod, quant
+n
+2
+V
+prod, quant
+F
+count_1_prod, count_2_prod
+o
+1 prod=prod
+2 prod=prod and quant<quant
+G
+count_2_prod=count_1_prod/2
+W
+T
+sales
+
+-SQL
+select s2.prod,s2.quant
+from
+(select prod, count(*) as c
+from sales
+group by prod
+) as s1,
+(select x.prod, x.quant,count(y.*) as c
+from sales as x, sales as y
+where x.prod=y.prod and y.quant<x.quant
+group by x.prod, x.quant
+) as s2
+where s1.prod=s2.prod and s1.c/2=s2.c
+order by s2.prod

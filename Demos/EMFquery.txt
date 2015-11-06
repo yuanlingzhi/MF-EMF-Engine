@@ -1,0 +1,18 @@
+S
+prod, mm, count_3_quant
+n
+3
+V
+prod, mm
+F
+count_3_quant, avg_1_quant, avg_2_quant
+o
+1 prod=prod and mm=mm-1
+2 prod=prod and mm=mm+1
+3 prod=prod and mm=mm and quant>avg_1_quant and quant<avg_2_quant
+G
+count_3_quant
+W
+yy=1997
+T
+sales

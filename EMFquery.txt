@@ -1,0 +1,14 @@
+S
+prod, quant
+n
+2
+V
+prod, quant
+F
+count_1_prod, count_2_prod
+o
+1 prod=prod
+2 prod=prod and quant<quant
+G
+count_2_prod=count_1_prod/2
+W

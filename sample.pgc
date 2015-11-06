@@ -1,0 +1,185 @@
+/*
+ * File - "sample.pgc"
+ * Desc - This is the sample program used for writing our engine.
+ *
+ * Steps to run this program : 
+ *  1. Log in to PostgreSQL server
+ *  2. Preprocessor - $ ecpg -I /usr/include/postgresql sample.pgc
+ *  3. Compile      - $ gcc -c -I /usr/include/postgresql/ sample.c
+ *  4. Link         - $ gcc -L /usr/include/postgresql/ sample.o -lecpg -o sample
+ *  5. Execute      - $ ./sample
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+EXEC SQL BEGIN DECLARE SECTION;
+struct {
+	char	*cust;
+	char	*prod;
+	short    dd;
+	short    mm;
+	short	 yy;
+	char	*state;
+	long	 quant;
+}	sale_rec;
+EXEC SQL END DECLARE SECTION;
+EXEC SQL INCLUDE sqlca;
+
+struct {
+	bool flag;
+	char cust[21];
+	long sum_1_quant;
+	short count_1_quant;
+	long sum_2_quant;
+	short count_2_quant;
+	long sum_3_quant;
+	short count_3_quant;
+} MFS[500];
+
+//----------------------------------------------------------------------
+// FUNCTION PROTOTYPE declaration
+//----------------------------------------------------------------------
+void	initialMFS();
+unsigned int	hashFunc(char*);
+//----------------------------------------------------------------------
+int main(int argc, char* argv[])
+//----------------------------------------------------------------------
+{
+   initialMFS();
+   //----------------------------------------------------------------------
+   // DATABASE CONNECTION
+   //----------------------------------------------------------------------
+   EXEC SQL CONNECT TO cs562@localhost:5432 USER postgres IDENTIFIED BY cs562;
+   EXEC SQL WHENEVER sqlerror sqlprint;
+
+   //----------------------------------------------------------------------
+   // PRINT TITLE
+   //----------------------------------------------------------------------   
+   printf(" CUST  | avg(x.sale) | avg(y.sale) | avg(z.sale)  \n");
+   printf("-------+-------------+-------------+------------\n");
+   //----------------------------------------------------------------------
+   // READ RECORDS
+   //----------------------------------------------------------------------
+   EXEC SQL DECLARE mycursor CURSOR FOR SELECT * FROM sales;
+   EXEC SQL SET TRANSACTION read only;
+   // group by grouping attributes,  assigned: Zhe Xu
+   // Open cursor
+   EXEC SQL OPEN mycursor;
+   // Fetch Data
+   EXEC SQL FETCH FROM mycursor INTO :sale_rec; //fetch the first row
+   while (sqlca.sqlcode == 0) {
+	unsigned int hash = hashFunc(sale_rec.cust);
+	while(MFS[hash].flag!=false)
+	{
+		if(strcmp(MFS[hash].cust,sale_rec.cust)==0) break;
+		else hash=(hash+1)%500;
+	}
+	if(MFS[hash].flag==false)
+	{
+	int i;
+	for(i = 0; sale_rec.cust[i]!='\0'; i++)
+		MFS[hash].cust[i] = sale_rec.cust[i];
+	MFS[hash].cust[i] = '\0';
+	MFS[hash].sum_1_quant = 0;
+	MFS[hash].count_1_quant = 0;
+	MFS[hash].sum_2_quant = 0;
+	MFS[hash].count_2_quant = 0;
+	MFS[hash].sum_3_quant = 0;
+	MFS[hash].count_3_quant = 0;
+	MFS[hash].flag = 1;
+	}
+      EXEC SQL FETCH FROM mycursor INTO :sale_rec; //fetch the rest rows
+   }
+   // Close cursor
+   EXEC SQL CLOSE mycursor;
+   //----------------------------------------------------------------------
+
+   //optimization relative aggrigate functions  assigned: Gong Cheng
+   // Open cursor
+   EXEC SQL OPEN mycursor;
+   // Fetch Data
+   EXEC SQL FETCH FROM mycursor INTO :sale_rec; //fetch the first row
+   while (sqlca.sqlcode == 0) {
+	unsigned int hash = hashFunc(sale_rec.cust);
+	while(strcmp(MFS[hash].cust,sale_rec.cust)!=0)
+	{
+		hash=(hash+1)%500;
+	}
+	if(strcmp(sale_rec.state,"NY")==0)
+	{
+		MFS[hash].sum_1_quant+=sale_rec.quant;
+		MFS[hash].count_1_quant++;
+	}
+	else if(strcmp(sale_rec.state,"CT")==0)
+	{
+		MFS[hash].sum_2_quant+=sale_rec.quant;
+		MFS[hash].count_2_quant++;
+	}
+	else if(strcmp(sale_rec.state,"NJ")==0)
+	{
+		MFS[hash].sum_3_quant+=sale_rec.quant;
+		MFS[hash].count_3_quant++;
+	}
+      EXEC SQL FETCH FROM mycursor INTO :sale_rec; //fetch the rest rows
+   }
+   // Close cursor
+   EXEC SQL CLOSE mycursor;
+   //----------------------------------------------------------------------
+   //output  assigned: Yanjun Wu
+	int i;
+	for(i = 0; i < 500; i++)
+	{
+		if(MFS[i].flag==0) continue;
+		long avg_1_quant, avg_2_quant, avg_3_quant;
+		if(MFS[i].count_1_quant==0) avg_1_quant=0;
+		else avg_1_quant=MFS[i].sum_1_quant/MFS[i].count_1_quant;
+		if(MFS[i].count_2_quant==0) avg_2_quant=0;
+		else avg_2_quant=MFS[i].sum_2_quant/MFS[i].count_2_quant;
+		if(MFS[i].count_3_quant==0) avg_3_quant=0;
+		else avg_3_quant=MFS[i].sum_3_quant/MFS[i].count_3_quant;
+		if(avg_1_quant>avg_2_quant && avg_1_quant>avg_3_quant)
+		{
+			printf(" %-5s |",MFS[i].cust);   // Customer
+			printf(" %11ld |",avg_1_quant);  // avg(x.sale)
+			printf(" %11ld |",avg_2_quant);  // avg(y.sale)
+			printf(" %11ld \n",avg_3_quant);  // avg(z.sale)
+		}
+	}
+
+   return 0;
+}
+
+//----------------------------------------------------------------------
+void	output_record()  //set of output
+//----------------------------------------------------------------------
+{
+	printf(" %-5s |",sale_rec.cust);   // Customer
+	printf(" %-7s |",sale_rec.prod);   // Product
+	printf("  %2d |",sale_rec.dd);     // Day
+	printf("  %2d |",sale_rec.mm);     // Month
+	printf(" %4d |",sale_rec.yy);      // Year
+	printf(" %-5s |",sale_rec.state);  // State
+	printf(" %5ld \n",sale_rec.quant);  // Quantity
+}
+
+void	initialMFS()
+{
+	int i;
+	for(i = 0; i < 500; i++)
+	{
+		MFS[i].flag=0;
+	}
+}
+  //assigned: Lingzhi Yuan
+unsigned int hashFunc(char* cust)
+{
+	int i;
+	unsigned int hash;
+	for(hash = 0, i = 0; cust[i]!='\0'; i++)
+	{
+		hash = (hash<<4)^(hash>>28)^cust[i];
+	}
+	return (hash%500);
+}
